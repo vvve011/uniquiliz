@@ -100,8 +100,14 @@ if uploaded_file is not None:
     progress_bar = st.progress(0)
     status_text = st.empty()
     
-    # Подсчет общего количества файлов
-    total_files_count = sum([len(files) for r, d, files in os.walk(EXTRACT_FOLDER)])
+    # Подсчет общего количества файлов (ЧЕСТНЫЙ ПОДСЧЕТ)
+    total_files_count = 0
+    for r, d, files in os.walk(EXTRACT_FOLDER):
+        if "__MACOSX" in r: continue
+        for f in files:
+            if not f.startswith("._") and f != ".DS_Store":
+                total_files_count += 1
+                
     if total_files_count == 0: total_files_count = 1
 
     # Основной цикл
