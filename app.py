@@ -5,6 +5,7 @@ import shutil
 import random
 import subprocess
 import hashlib
+import uuid
 import streamlit.components.v1 as components
 from PIL import Image, ImageEnhance, ImageFilter
 
@@ -13,6 +14,7 @@ st.set_page_config(page_title="UniqCreatives Cloud", page_icon="⚡", layout="ce
 
 st.title("⚡ Быстрый Уникализатор")
 st.markdown("Просто перетащите архив. Процесс начнется автоматически.")
+st.caption("Поддерживает одновременную работу нескольких пользователей.")
 
 # --- ФУНКЦИИ ОБРАБОТКИ ---
 def unique_image(src, dst):
@@ -69,12 +71,16 @@ def unique_video(src, dst):
 uploaded_file = st.file_uploader("Загрузите ZIP-архив", type="zip", label_visibility="collapsed")
 
 if uploaded_file is not None:
-    # АВТОМАТИЧЕСКИЙ ЗАПУСК БЕЗ КНОПКИ
+    # ГЕНЕРАЦИЯ УНИКАЛЬНОЙ СЕССИИ (Чтобы файлы разных юзеров не смешивались)
+    session_id = str(uuid.uuid4())[:8]
     
-    # Папки
-    EXTRACT_FOLDER = "temp_in"
-    PROCESSED_FOLDER = "temp_out"
-    
+    # Уникальные имена папок и файлов
+    EXTRACT_FOLDER = f"temp_in_{session_id}"
+    PROCESSED_FOLDER = f"temp_out_{session_id}"
+    INPUT_ZIP = f"input_{session_id}.zip"
+    RESULT_ZIP_NAME = f"result_{session_id}" # make_archive добавит .zip
+    RESULT_ZIP_FILE = f"{RESULT_ZIP_NAME}.zip"
+
     # Очистка и создание папок
     if os.path.exists(EXTRACT_FOLDER): shutil.rmtree(EXTRACT_FOLDER)
     if os.path.exists(PROCESSED_FOLDER): shutil.rmtree(PROCESSED_FOLDER)
@@ -82,19 +88,19 @@ if uploaded_file is not None:
     os.makedirs(PROCESSED_FOLDER)
     
     # Сохранение архива
-    with open("input.zip", "wb") as f:
+    with open(INPUT_ZIP, "wb") as f:
         f.write(uploaded_file.getbuffer())
     
     # Распаковка
-    with zipfile.ZipFile("input.zip", 'r') as zip_ref:
+    with zipfile.ZipFile(INPUT_ZIP, 'r') as zip_ref:
         zip_ref.extractall(EXTRACT_FOLDER)
 
     # Счетчики статистики
     stats = {
-        "success": 0,  # Успешно уникализировано
-        "errors": 0,   # Ошибка обработки (скопирован оригинал)
-        "skipped": 0,  # Не медиа файл (txt, pdf и т.д. - скопирован оригинал)
-        "total": 0     # Всего файлов
+        "success": 0,
+        "errors": 0,
+        "skipped": 0,
+        "total": 0
     }
     
     progress_bar = st.progress(0)
@@ -128,8 +134,6 @@ if uploaded_file is not None:
             stats["total"] += 1
             
             # Логика подсчета
-            is_processed = False
-            
             if ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp']:
                 if unique_image(src, dst):
                     stats["success"] += 1
@@ -141,17 +145,15 @@ if uploaded_file is not None:
                 else:
                     stats["errors"] += 1
             else:
-                # Если файл не картинка и не видео - просто копируем
                 shutil.copy2(src, dst)
                 stats["skipped"] += 1
             
-            # Обновление прогресса
             progress = min(stats["total"] / total_files_count, 1.0)
             progress_bar.progress(progress)
             status_text.text(f"Обработка: {stats['total']} из {total_files_count}")
 
     # Архивация
-    shutil.make_archive("result", 'zip', PROCESSED_FOLDER)
+    shutil.make_archive(RESULT_ZIP_NAME, 'zip', PROCESSED_FOLDER)
     
     # Очистка прогресс-бара
     progress_bar.empty()
@@ -161,15 +163,15 @@ if uploaded_file is not None:
     st.success("✅ Готово! Файлы обработаны.")
     
     col1, col2, col3 = st.columns(3)
-    col1.metric("Успешно (Уникализировано)", stats["success"])
-    col2.metric("С ошибкой (Оригиналы)", stats["errors"])
-    col3.metric("Пропущено (Другие файлы)", stats["skipped"])
+    col1.metric("Успешно", stats["success"])
+    col2.metric("Ошибки", stats["errors"])
+    col3.metric("Пропущено", stats["skipped"])
     
     if stats["errors"] > 0:
-        st.warning("⚠️ Некоторые файлы (Ошибки) были скопированы без изменений. Возможно, они повреждены или формат не поддерживается.")
+        st.warning("⚠️ Часть файлов скопирована без изменений (ошибки формата).")
     
     # Кнопка скачивания
-    with open("result.zip", "rb") as fp:
+    with open(RESULT_ZIP_FILE, "rb") as fp:
         btn = st.download_button(
             label="📥 СКАЧАТЬ АРХИВ",
             data=fp,
@@ -177,17 +179,14 @@ if uploaded_file is not None:
             mime="application/zip",
             type="primary"
         )
-        
-    # --- АВТО-КЛИК ПО КНОПКЕ СКАЧИВАНИЯ (JS HACK) ---
-    # Пытаемся найти кнопку по тексту и кликнуть её программно
+    
+    # --- АВТО-КЛИК (JS) ---
     components.html(
         """
         <script>
-        // Небольшая задержка, чтобы кнопка успела отрисоваться
         setTimeout(function() {
             const anchors = window.parent.document.getElementsByTagName('a');
             for (let i = 0; i < anchors.length; i++) {
-                // Ищем кнопку по тексту лейбла
                 if (anchors[i].innerText.includes('📥 СКАЧАТЬ АРХИВ')) {
                     anchors[i].click();
                     break;
@@ -198,3 +197,13 @@ if uploaded_file is not None:
         """,
         height=0
     )
+
+    # --- ОЧИСТКА ВРЕМЕННЫХ ФАЙЛОВ ---
+    # Удаляем файлы после создания кнопки (данные уже в памяти кнопки)
+    try:
+        shutil.rmtree(EXTRACT_FOLDER)
+        shutil.rmtree(PROCESSED_FOLDER)
+        if os.path.exists(INPUT_ZIP): os.remove(INPUT_ZIP)
+        if os.path.exists(RESULT_ZIP_FILE): os.remove(RESULT_ZIP_FILE)
+    except Exception as e:
+        print(f"Cleanup error: {e}")
