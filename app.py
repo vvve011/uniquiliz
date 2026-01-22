@@ -175,29 +175,11 @@ if uploaded_file is not None:
         btn = st.download_button(
             label="📥 СКАЧАТЬ АРХИВ",
             data=fp,
-            file_name="UNIQUE_CREATIVES.zip",
+            file_name=uploaded_file.name, # Используем оригинальное имя файла
             mime="application/zip",
             type="primary"
         )
     
-    # --- АВТО-КЛИК (JS) ---
-    components.html(
-        """
-        <script>
-        setTimeout(function() {
-            const anchors = window.parent.document.getElementsByTagName('a');
-            for (let i = 0; i < anchors.length; i++) {
-                if (anchors[i].innerText.includes('📥 СКАЧАТЬ АРХИВ')) {
-                    anchors[i].click();
-                    break;
-                }
-            }
-        }, 1000);
-        </script>
-        """,
-        height=0
-    )
-
     # --- ОЧИСТКА ВРЕМЕННЫХ ФАЙЛОВ ---
     # Удаляем файлы после создания кнопки (данные уже в памяти кнопки)
     try:
