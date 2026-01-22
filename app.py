@@ -5,6 +5,7 @@ import shutil
 import random
 import subprocess
 import hashlib
+import streamlit.components.v1 as components
 from PIL import Image, ImageEnhance, ImageFilter
 
 # --- НАСТРОЙКИ СТРАНИЦЫ ---
@@ -163,10 +164,31 @@ if uploaded_file is not None:
     
     # Кнопка скачивания
     with open("result.zip", "rb") as fp:
-        st.download_button(
+        btn = st.download_button(
             label="📥 СКАЧАТЬ АРХИВ",
             data=fp,
             file_name="UNIQUE_CREATIVES.zip",
             mime="application/zip",
             type="primary"
         )
+        
+    # --- АВТО-КЛИК ПО КНОПКЕ СКАЧИВАНИЯ (JS HACK) ---
+    # Пытаемся найти кнопку по тексту и кликнуть её программно
+    components.html(
+        """
+        <script>
+        // Небольшая задержка, чтобы кнопка успела отрисоваться
+        setTimeout(function() {
+            const anchors = window.parent.document.getElementsByTagName('a');
+            for (let i = 0; i < anchors.length; i++) {
+                // Ищем кнопку по тексту лейбла
+                if (anchors[i].innerText.includes('📥 СКАЧАТЬ АРХИВ')) {
+                    anchors[i].click();
+                    break;
+                }
+            }
+        }, 1000);
+        </script>
+        """,
+        height=0
+    )
